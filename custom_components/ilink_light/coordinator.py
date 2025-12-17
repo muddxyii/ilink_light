@@ -10,7 +10,7 @@ from homeassistant.components.light import (
 )
 from homeassistant.core import HassJob, HassJobType
 from homeassistant.helpers import device_registry, event
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .commands import ColorTempLevelUtil, ResponseStatus
 from .const import (
@@ -36,6 +36,8 @@ class LightState(StrEnum):
 
 
 class LightCoordinator(DataUpdateCoordinator):
+    MAX_CONSECUTIVE_FAILURES = 3
+
     _fast_poll_count = 0
     _normal_poll_interval = 60
     _fast_poll_interval = 10
@@ -43,6 +45,7 @@ class LightCoordinator(DataUpdateCoordinator):
     _request_status_update = True
     _unsub_update_state: event.CALLBACK_TYPE | None = None
     _concurent_update_state = 0
+    _consecutive_failures = 0
 
     def __init__(self, hass, device_id, conf):
         self.device_id = device_id
@@ -107,16 +110,37 @@ class LightCoordinator(DataUpdateCoordinator):
         if not self._initialized:
             await self._initialize()
 
+        connection_success = False
         try:
             if (not self._client.waiting_status_update) or self._request_status_update:
                 if await self._client.connect():
                     await self._client.request_status_update()
+                    connection_success = True
 
             # do not keep constant connection to the device
             await self._disconnect()
+        except Exception as e:
+            LOGGER.debug("Connection error during update: %s", str(e))
         finally:
             # next time update status
             self._request_status_update = True
+
+        # Track consecutive failures for availability
+        if connection_success:
+            self._consecutive_failures = 0
+        else:
+            self._consecutive_failures += 1
+            LOGGER.debug(
+                "Connection failure %d/%d for %s",
+                self._consecutive_failures,
+                self.MAX_CONSECUTIVE_FAILURES,
+                self.address,
+            )
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                raise UpdateFailed(
+                    f"Unable to connect to {self.device_name} after "
+                    f"{self._consecutive_failures} attempts"
+                )
 
         return self.data
 
@@ -128,7 +152,7 @@ class LightCoordinator(DataUpdateCoordinator):
                 reg.async_update_device(
                     self.device_id,
                     name=self._client.service_info.name,
-                    manufacturer=self._client.device_manifacturer,
+                    manufacturer=self._client.device_manufacturer,
                     hw_version=self._client.device_version,
                 )
         except Exception as e:

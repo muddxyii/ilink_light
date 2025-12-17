@@ -37,11 +37,11 @@ color_temp_mappings = {
 
 class Scenes:
     @staticmethod
-    def all() -> []:
+    def all() -> list[str]:
         return list(all_scenes.values())
 
     @staticmethod
-    def some() -> []:
+    def some() -> list[str]:
         return list(all_scenes.values())[:11]
 
     @staticmethod
@@ -58,7 +58,7 @@ class ColorTempLevelUtil:
     @staticmethod
     def color_temp_to_level(temp: int):
         if temp > 6000:
-            temp = 600
+            temp = 6000
         elif temp < 3000:
             temp = 3000
 

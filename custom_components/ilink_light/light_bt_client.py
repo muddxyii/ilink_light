@@ -1,7 +1,6 @@
 import asyncio
 from typing import Awaitable, Callable
 
-import async_timeout
 from bleak import BleakClient, BleakGATTCharacteristic, BLEDevice
 from bleak.exc import BleakError
 from home_assistant_bluetooth import BluetoothServiceInfoBleak
@@ -20,7 +19,7 @@ from .const import LOGGER
 
 class LightBtClient:
     service_info: BluetoothServiceInfoBleak | None = None
-    device_manifacturer: str | None = None
+    device_manufacturer: str | None = None
     device_version: str | None = None
     _status = None
     _callback = None
@@ -41,7 +40,7 @@ class LightBtClient:
         self._bt_client = None
         self._address = address
         self._send_command_err_count = 0
-        # self.device_manifacturer = None
+        # self.device_manufacturer = None
         self._callback = callback
 
     @property
@@ -88,7 +87,7 @@ class LightBtClient:
                 if value := md.get(5101, None):
                     self.device_version = f"{value[0]}.{value[1]}.{value[2]}.{value[3]}"
                 if value := md.get(1494, None):
-                    self.device_manifacturer = value.decode("ascii") or None
+                    self.device_manufacturer = value.decode("ascii") or None
 
             await self._bt_client.start_notify(
                 CHARACTERISTIC_REQUEST_STATUS, self._notification_handler
@@ -194,7 +193,7 @@ class LightBtClient:
     async def _send_command(self, command: str) -> None:
         LOGGER.debug("send command %s: %s", self._address, command)
         try:
-            async with async_timeout.timeout(1):
+            async with asyncio.timeout(1):
                 await self._write_uuid(CHARACTERISTIC_SEND_CMD, bytes.fromhex(command))
             self._send_command_err_count = 0
             # command is exected immediatelly, but client sometime waits for 10 seconds
